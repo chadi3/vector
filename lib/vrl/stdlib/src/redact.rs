@@ -20,6 +20,14 @@ static US_SOCIAL_SECURITY_NUMBER: Lazy<regex::Regex> = Lazy::new(|| {
     "#).unwrap()
 });
 
+static INDIA_PAN_NUMBER: Lazy<regex::Regex> = Lazy::new(|| {
+    regex::Regex::new(
+    r#"(?x)                                                               # Ignore whitespace and comments in the regex expression.
+    [A-Z]{5}[0-9]{4}[A-Z]{1}                                              # India PAN Card Pattern
+    "#).unwrap()
+});
+
+
 #[derive(Clone, Copy, Debug)]
 pub struct Redact;
 
@@ -54,6 +62,11 @@ impl Function for Redact {
                 title: "us_social_security_number",
                 source: r#"redact({ "name": "John Doe", "ssn": "123-12-1234"}, filters: ["us_social_security_number"])"#,
                 result: Ok(r#"{ "name": "John Doe", "ssn": "[REDACTED]" }"#),
+            },
+            Example {
+                title: "india_pan_number",
+                source: r#"redact({ "name": "John Doe", "pan": "ABCDE1234F"}, filters: ["india_pan_number"])"#,
+                result: Ok(r#"{ "name": "John Doe", "pan": "[REDACTED]" }"#),
             },
         ]
     }
@@ -157,6 +170,7 @@ impl FunctionExpression for RedactFn {
 enum Filter {
     Pattern(Vec<Pattern>),
     UsSocialSecurityNumber,
+    IndiaPANNumber,
 }
 
 #[derive(Debug, Clone)]
@@ -181,6 +195,7 @@ impl TryFrom<Value> for Filter {
 
                 match r#type.as_ref() {
                     b"us_social_security_number" => Ok(Filter::UsSocialSecurityNumber),
+                    b"india_pan_number" => Ok(Filter::IndiaPANNumber),
                     b"pattern" => {
                         let patterns = match object
                             .get("patterns")
@@ -206,6 +221,7 @@ impl TryFrom<Value> for Filter {
             Value::Bytes(bytes) => match bytes.as_ref() {
                 b"pattern" => Err("pattern cannot be used without arguments"),
                 b"us_social_security_number" => Ok(Filter::UsSocialSecurityNumber),
+                b"india_pan_number" => Ok(Filter::IndiaPANNumber),
                 _ => Err("unknown filter name"),
             },
             Value::Regex(regex) => Ok(Filter::Pattern(vec![Pattern::Regex((*regex).clone())])),
@@ -232,6 +248,9 @@ impl Filter {
             }
             Filter::UsSocialSecurityNumber => {
                 US_SOCIAL_SECURITY_NUMBER.replace_all(input, redactor.pattern())
+            }
+            Filter::IndiaPANNumber => {
+                INDIA_PAN_NUMBER.replace_all(input,redactor.pattern())
             }
         }
     }
@@ -312,6 +331,14 @@ mod test {
              want: Ok("hello [REDACTED] world"),
              tdef: TypeDef::bytes().infallible(),
         }
+        india_pan_number{
+            args: func_args![
+                value: "hello ABCDE1234F world",
+                filters: vec!["india_pan_number"],
+            ],
+            want: Ok("hello [REDACTED] world"),
+            tdef: TypeDef::bytes().infallible(),
+       }
 
         invalid_filter {
              args: func_args![

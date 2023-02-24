@@ -2153,6 +2153,13 @@ bench_function! {
         ],
         want: Ok("hello [REDACTED] world"),
     }
+    india_pan_number{
+        args: func_args![
+            value: "hello ABCDE1234F world",
+            filters: vec!["india_pan_number"],
+        ],
+        want: Ok("hello [REDACTED] world")
+    },
 }
 
 bench_function! {
